@@ -1,5 +1,5 @@
-
 using SampleApi.Elastic.Configuration;
+using SampleApi.Elastic.Models;
 using SampleApi.Elastic.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -13,7 +13,8 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.Configure<ElasticSettings>(builder.Configuration.GetSection("ElasticsSettings"));
 
-builder.Services.AddSingleton<IElasticService, ElasticService>();
+// Register the generic ElasticService for the User model
+builder.Services.AddScoped(typeof(IElasticService<>), typeof(ElasticService<>));
 
 
 var app = builder.Build();

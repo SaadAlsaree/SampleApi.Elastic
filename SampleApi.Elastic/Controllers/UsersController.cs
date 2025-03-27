@@ -11,9 +11,9 @@ namespace SampleApi.Elastic.Controllers
     {
 
         private readonly ILogger<UsersController> _logger;
-        private readonly IElasticService _elasticService;
+        private readonly IElasticService<User> _elasticService;
 
-        public UsersController(ILogger<UsersController> logger, IElasticService elasticService)
+        public UsersController(ILogger<UsersController> logger, IElasticService<User> elasticService)
         {
             _logger = logger;
             _elasticService = elasticService;
@@ -31,14 +31,14 @@ namespace SampleApi.Elastic.Controllers
         [HttpPost("add-user")]
         public async Task<IActionResult> AddUser([FromBody] User user)
         {
-            var result = await _elasticService.AddOrUpdateUserAsync(user);
+            var result = await _elasticService.IndexDocumentAsync(user);
             return result ? Ok($"User {user.FirstName + user.LastName} added or updated.") : StatusCode(500, "Error adding or update user.");
         }
 
         [HttpPut("update-users")]
         public async Task<IActionResult> UpdateUsers([FromBody] IEnumerable<User> users, string indexName)
         {
-            var result = await _elasticService.AddOrUpdateBulkAsync(users, indexName);
+            var result = await _elasticService.BulkIndexAsync(users);
             return result ? Ok($"Users added or updated.") : StatusCode(500, "Error adding or update users.");
         }
 
@@ -46,30 +46,43 @@ namespace SampleApi.Elastic.Controllers
         [HttpGet("get-user/{key}")]
         public async Task<IActionResult> GetUser(string key)
         {
-            var user = await _elasticService.Get(key);
+            var user = await _elasticService.GetDocumentAsync(key);
             return user != null ? Ok(user) : NotFound("User not found.");
         }
 
         [HttpGet("get-all-users")]
         public async Task<IActionResult> GetAllUsers()
         {
-            var users = await _elasticService.GetAll();
+            var users = await _elasticService.GetAllAsync();
             return users != null ? Ok(users) : NotFound("No users found.");
         }
 
         [HttpDelete("delete-user/{key}")]
         public async Task<IActionResult> DeleteUser(string key)
         {
-            var result = await _elasticService.RemoveUserAsync(key);
+            var result = await _elasticService.DeleteDocumentAsync(key);
             return result ? Ok($"User {key} deleted.") : NotFound("User not found.");
         }
 
         [HttpDelete("delete-all-users")]
         public async Task<IActionResult> DeleteAllUsers()
         {
-            var result = await _elasticService.RemoveAllUsersAsync();
-            return result != null ? Ok($"Deleted {result} users.") : NotFound("No users found.");
+            try
+            {
+                var allUsers = await _elasticService.GetAllAsync();
+                var ids = allUsers.Select(u => u.Id.ToString()).ToList();
 
+                if (!ids.Any())
+                    return NotFound("No users found.");
+
+                var result = await _elasticService.BulkDeleteAsync(ids.Cast<string>());
+                return result ? Ok($"Deleted {ids.Count} users.") : StatusCode(500, "Error deleting users.");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting all users");
+                return StatusCode(500, "Error deleting all users");
+            }
         }
     }
 }
